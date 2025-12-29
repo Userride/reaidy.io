@@ -2,7 +2,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
-const helmet = require("helmet");
 require("dotenv").config();
 
 const User = require("./models/User");
@@ -10,33 +9,56 @@ const User = require("./models/User");
 const app = express();
 
 /* ===============================
-   SECURITY & MIDDLEWARE
+   MIDDLEWARE
 ================================ */
-
-// Security headers
-app.use(helmet());
-
-// JSON body parsing
 app.use(express.json());
 
-// 🔥 CORS OPEN (Frontend abhi deploy nahi hai)
-app.use(cors());
+app.use(
+  cors({
+    origin: "*", // ✅ frontend abhi deploy nahi hai
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"]
+  })
+);
 
 /* ===============================
-   MONGODB CONNECTION
+   ROOT ROUTE (IMPORTANT FOR RENDER)
 ================================ */
+app.get("/", (req, res) => {
+  res.json({
+    message: "🚀 Learning Roadmap Backend is running",
+    health: "/api/health",
+    auth: "/api/auth",
+    assessment: "/api/assessment",
+    questions: "/api/questions"
+  });
+});
 
+/* ===============================
+   HEALTH CHECK
+================================ */
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "OK",
+    demo: "demo@learning.com / password123",
+    timestamp: new Date()
+  });
+});
+
+/* ===============================
+   DATABASE CONNECTION
+================================ */
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch(err =>
-    console.error("❌ MongoDB Error:", err.message)
-  );
+  .catch(err => {
+    console.error("❌ MongoDB Error:", err.message);
+    process.exit(1);
+  });
 
 /* ===============================
-   DEMO USER SEED (DEV ONLY)
+   SEED DEMO USER (SAFE)
 ================================ */
-
 async function seedDemoUser() {
   try {
     const existingUser = await User.findOne({
@@ -44,8 +66,6 @@ async function seedDemoUser() {
     });
 
     if (!existingUser) {
-      console.log("🌱 Creating demo user...");
-
       const passwordHash = await bcrypt.hash("password123", 10);
 
       await User.create({
@@ -58,47 +78,40 @@ async function seedDemoUser() {
       });
 
       console.log(
-        "✅ Demo user created! Email: demo@learning.com | Password: password123"
+        "🌱 Demo user created → demo@learning.com / password123"
       );
     } else {
       console.log("ℹ️ Demo user already exists");
     }
-  } catch (error) {
-    console.error("❌ Seed error:", error.message);
+  } catch (err) {
+    console.error("❌ Seed error:", err.message);
   }
 }
 
-// Seed only in development
-if (process.env.NODE_ENV !== "production") {
-  seedDemoUser();
-}
+seedDemoUser();
 
 /* ===============================
    ROUTES
 ================================ */
-
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/assessment", require("./routes/assessment"));
 app.use("/api/questions", require("./routes/questions"));
 
 /* ===============================
-   HEALTH CHECK
+   404 HANDLER
 ================================ */
-
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "OK",
-    environment: process.env.NODE_ENV || "development",
-    demo: "demo@learning.com / password123"
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Route not found",
+    path: req.originalUrl
   });
 });
 
 /* ===============================
    SERVER START
 ================================ */
-
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Backend running on http://localhost:${PORT}`);
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
